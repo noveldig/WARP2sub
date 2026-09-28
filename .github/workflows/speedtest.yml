@@ -65,7 +65,7 @@ jobs:
             exit 1
           fi
 
-          # 2. 检查或初始化 hosts 文件（如果不存在则自动写入初始 IP 与示例域名）
+          # 2. 检查或初始化 hosts 文件（如不存在自动生成，保持统一旧 IP）
           if [ ! -f "hosts" ]; then
             echo "hosts file not found, creating default hosts..."
             echo "# Cloudflare CDN Acceleration Hosts" > hosts
