@@ -4,13 +4,13 @@ on:
   schedule:
     # 每天 UTC 00:00 (北京时间 08:00) 自动触发
     - cron: '0 0 * * *'
-  workflow_dispatch: # 支持在 GitHub 页面手动一键运行
+  workflow_dispatch: # 支持在 GitHub 页面手动一键触发
 
 jobs:
   speedtest:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 明确赋予 Actions 写入仓库代码的权限
+      contents: write # 赋予 Actions 写入和提交代码的权限
 
     steps:
       - name: Checkout Repository
@@ -22,12 +22,12 @@ jobs:
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -o 'https://[^"]*linux_amd64[^"]*' | sed -n '1p')
           echo "Found Download URL: $DOWNLOAD_URL"
           
-          # 2. 建立独立临时目录解压
+          # 2. 建立独立临时目录隔离解压
           mkdir -p bin_tmp
           wget -O CloudflareSpeedTest.tar.gz "$DOWNLOAD_URL"
           tar -zxf CloudflareSpeedTest.tar.gz -C bin_tmp
           
-          # 3. 提取二进制执行文件
+          # 3. 精确寻找二进制程序（排除 txt/md 说明文档）
           TARGET_FILE=$(find bin_tmp -type f ! -name "*.txt" ! -name "*.md" | head -n 1)
           
           if [ -n "$TARGET_FILE" ]; then
@@ -41,9 +41,9 @@ jobs:
           
           chmod +x CloudflareSpeedTest
 
-      - name: Fetch High-Quality Cloudflare IP List
+      - name: Fetch Cloudflare IP List
         run: |
-          # 优先使用过滤后的优质 CDN IP 列表，避开易被阻断的 WARP 段
+          # 获取待测 IP 列表，若下载失败则使用默认常用 CIDR
           curl -s https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/ip.txt -o ip.txt || true
           if [ ! -s ip.txt ]; then
             echo "104.16.0.0/13" > ip.txt
@@ -54,12 +54,12 @@ jobs:
 
       - name: Run SpeedTest
         run: |
-          # 执行测速，保留延迟最低的前 10 个 IP 输出到 result.csv
+          # 运行测速：测试 ip.txt 中的 IP，保留延迟最低的前 10 个输出到 result.csv
           ./CloudflareSpeedTest -f ip.txt -dn 10 -o result.csv
 
-      - name: Update Hosts File
+      - name: Replace Hosts IP with Best IP
         run: |
-          # 1. 从 result.csv 提取最佳 IP
+          # 1. 从 result.csv 中提取测速第一名的最佳 IP (排除 CSV 标题头)
           BEST_IP=$(sed -n '2p' result.csv | awk -F',' '{print $1}')
           echo "Best Cloudflare IP found: $BEST_IP"
           
@@ -68,16 +68,24 @@ jobs:
             exit 1
           fi
 
-          # 2. 如果 hosts 不存在则创建示例
+          # 2. 检查根目录下 hosts 文件是否存在
           if [ ! -f "hosts" ]; then
-            echo "104.16.132.229 cdn.example.com" > hosts
+            echo "hosts file not found, creating a default hosts file..."
+            echo "# Cloudflare CDN Acceleration Hosts" > hosts
+            echo "104.16.132.229 cdn.example.com" >> hosts
+            echo "104.16.132.229 assets.example.com" >> hosts
           fi
 
-          # 3. 读取并全局替换旧 IP
+          # 3. 读取 hosts 中当前已有的统一非空旧 IP（自动匹配第一个 IPv4 地址）
           OLD_IP=$(grep -E -o "([0-9]{1,3}\.){3}[0-9]{1,3}" hosts | head -n 1)
+          
           if [ -n "$OLD_IP" ]; then
             echo "Replacing OLD_IP ($OLD_IP) with BEST_IP ($BEST_IP)..."
+            # 核心替换逻辑：使用 sed 将 hosts 中的旧 IP 统一替换为测速出的最佳 IP
             sed -i "s/$OLD_IP/$BEST_IP/g" hosts
+          else
+            echo "Error: No valid IPv4 address found in hosts file to replace!"
+            exit 1
           fi
 
       - name: Commit and Push Changes
@@ -87,7 +95,7 @@ jobs:
           
           git add hosts result.csv
           if git diff --staged --quiet; then
-            echo "No changes detected."
+            echo "No changes detected in hosts or result.csv."
           else
             BEST_IP=$(sed -n '2p' result.csv | awk -F',' '{print $1}')
             git commit -m "chore: auto update Cloudflare IP to [$BEST_IP]"
