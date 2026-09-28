@@ -1,48 +1,95 @@
-name: Auto Update Google, YouTube & Spotify Hosts
+name: Auto Cloudflare SpeedTest & Update Hosts
 
 on:
   schedule:
-    # 每天 UTC 00:00 (北京时间 08:00) 自动更新
+    # 每天 UTC 00:00 (北京时间 08:00) 自动触发
     - cron: '0 0 * * *'
-  workflow_dispatch: # 支持手动点击运行
+  workflow_dispatch: # 支持在 GitHub 页面手动一键运行
 
 jobs:
-  update-hosts:
+  speedtest:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # 明确赋予 Actions 写入仓库代码的权限
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fetch and Combine Google & Spotify Hosts
+      - name: Download CloudflareSpeedTest Tool
         run: |
-          echo "# Automatically Generated Hosts for Google, YouTube & Spotify" > hosts_new
-          echo "# Updated at: $(date -u)" >> hosts_new
-          echo "" >> hosts_new
+          # 1. 动态获取最新 Linux amd64 版本的下载地址
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -o 'https://[^"]*linux_amd64[^"]*' | sed -n '1p')
+          echo "Found Download URL: $DOWNLOAD_URL"
+          
+          # 2. 建立独立临时目录解压
+          mkdir -p bin_tmp
+          wget -O CloudflareSpeedTest.tar.gz "$DOWNLOAD_URL"
+          tar -zxf CloudflareSpeedTest.tar.gz -C bin_tmp
+          
+          # 3. 提取二进制执行文件
+          TARGET_FILE=$(find bin_tmp -type f ! -name "*.txt" ! -name "*.md" | head -n 1)
+          
+          if [ -n "$TARGET_FILE" ]; then
+            echo "Found binary: $TARGET_FILE"
+            mv "$TARGET_FILE" ./CloudflareSpeedTest
+            rm -rf bin_tmp CloudflareSpeedTest.tar.gz
+          else
+            echo "Error: Failed to locate binary executable!"
+            exit 1
+          fi
+          
+          chmod +x CloudflareSpeedTest
 
-          # 1. 获取 Google & YouTube 最新的有效 Hosts 源
-          echo "# --- Google & YouTube Hosts ---" >> hosts_new
-          curl -s https://raw.githubusercontent.com/521meme/hosts/main/hosts | grep -E "google|youtube|ytimg|ggpht|googlevideo|gstatic" >> hosts_new || true
-          echo "" >> hosts_new
+      - name: Fetch High-Quality Cloudflare IP List
+        run: |
+          # 优先使用过滤后的优质 CDN IP 列表，避开易被阻断的 WARP 段
+          curl -s https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/ip.txt -o ip.txt || true
+          if [ ! -s ip.txt ]; then
+            echo "104.16.0.0/13" > ip.txt
+            echo "104.24.0.0/14" >> ip.txt
+            echo "104.28.0.0/14" >> ip.txt
+            echo "188.114.96.0/24" >> ip.txt
+          fi
 
-          # 2. 获取 Spotify 最新的有效 Hosts 源
-          echo "# --- Spotify Hosts ---" >> hosts_new
-          curl -s https://raw.githubusercontent.com/521meme/hosts/main/hosts | grep -E "spotify" >> hosts_new || true
+      - name: Run SpeedTest
+        run: |
+          # 执行测速，保留延迟最低的前 10 个 IP 输出到 result.csv
+          ./CloudflareSpeedTest -f ip.txt -dn 10 -o result.csv
 
-          # 替换覆盖主 hosts 文件
-          mv hosts_new hosts
+      - name: Update Hosts File
+        run: |
+          # 1. 从 result.csv 提取最佳 IP
+          BEST_IP=$(sed -n '2p' result.csv | awk -F',' '{print $1}')
+          echo "Best Cloudflare IP found: $BEST_IP"
+          
+          if [ -z "$BEST_IP" ]; then
+            echo "Error: Failed to extract best IP from result.csv!"
+            exit 1
+          fi
+
+          # 2. 如果 hosts 不存在则创建示例
+          if [ ! -f "hosts" ]; then
+            echo "104.16.132.229 cdn.example.com" > hosts
+          fi
+
+          # 3. 读取并全局替换旧 IP
+          OLD_IP=$(grep -E -o "([0-9]{1,3}\.){3}[0-9]{1,3}" hosts | head -n 1)
+          if [ -n "$OLD_IP" ]; then
+            echo "Replacing OLD_IP ($OLD_IP) with BEST_IP ($BEST_IP)..."
+            sed -i "s/$OLD_IP/$BEST_IP/g" hosts
+          fi
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add hosts
+          git add hosts result.csv
           if git diff --staged --quiet; then
             echo "No changes detected."
           else
-            git commit -m "chore: auto update Google, YouTube & Spotify Hosts"
+            BEST_IP=$(sed -n '2p' result.csv | awk -F',' '{print $1}')
+            git commit -m "chore: auto update Cloudflare IP to [$BEST_IP]"
             git push
           fi
