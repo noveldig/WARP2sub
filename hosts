@@ -1,0 +1,18 @@
+# Google & YouTube Hosts
+# 注意：需将 142.250.x.x 替换为你当前网络下打通的有效 Google 官方 IP
+
+# Google Core Services
+142.250.204.46 www.google.com
+142.250.204.46 google.com
+142.250.204.46 accounts.google.com
+142.250.204.46 ssl.gstatic.com
+142.250.204.46 gstatic.com
+142.250.204.46 apis.google.com
+
+# YouTube Services
+142.250.204.46 www.youtube.com
+142.250.204.46 youtube.com
+142.250.204.46 m.youtube.com
+142.250.204.46 i.ytimg.com
+142.250.204.46 yt3.ggpht.com
+142.250.204.46 googlevideo.com
