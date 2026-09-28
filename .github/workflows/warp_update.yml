@@ -2,9 +2,9 @@ name: Auto Cloudflare SpeedTest & Update Hosts
 
 on:
   schedule:
-    # 每天 UTC 00:00 自动触发一次
+    # 每天 UTC 00:00 自动运行一次
     - cron: '0 0 * * *'
-  workflow_dispatch: # 支持在 GitHub 页面手动点击运行
+  workflow_dispatch: # 支持在 GitHub 页面手动一键触发
 
 jobs:
   speedtest:
@@ -65,16 +65,22 @@ jobs:
             exit 1
           fi
 
-          # 2. 检查项目根目录下是否存在 hosts 文件，若不存在则创建初始示例
+          # 2. 检查或初始化 hosts 文件（首次运行自动补全初始统一 IP）
           if [ ! -f "hosts" ]; then
-            echo "104.16.132.229 cdn.example.com" > hosts
+            echo "hosts file not found, creating a default hosts file..."
+            cat << 'EOF' > hosts
+# Cloudflare CDN Acceleration Hosts
+104.16.132.229 cdn.example.com
+104.16.132.229 assets.example.com
+EOF
           fi
 
-          # 3. 提取 hosts 中当前已有的 IP
+          # 3. 提取 hosts 中当前已有的统一旧 IP（匹配第一个 IPv4 地址）
           OLD_IP=$(grep -E -o "([0-9]{1,3}\.){3}[0-9]{1,3}" hosts | head -n 1)
           
           if [ -n "$OLD_IP" ]; then
             echo "Replacing OLD_IP ($OLD_IP) with BEST_IP ($BEST_IP)..."
+            # 将 hosts 中所有的旧 IP 统一替换为最新的最佳 IP
             sed -i "s/$OLD_IP/$BEST_IP/g" hosts
           else
             echo "Error: No valid IPv4 address found in hosts file to replace!"
