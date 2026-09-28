@@ -21,7 +21,7 @@ jobs:
 
       - name: Download CloudflareSpeedTest Tool
         run: |
-          # 1. 提取最新版下载链接
+          # 1. 动态提取最新版下载链接
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -o 'https://[^"]*linux_amd64[^"]*' | sed -n '1p')
           echo "Found Download URL: $DOWNLOAD_URL"
           
@@ -29,12 +29,18 @@ jobs:
           wget -O CloudflareSpeedTest.tar.gz "$DOWNLOAD_URL"
           tar -zxf CloudflareSpeedTest.tar.gz
           
-          # 3. 动态寻找解压出的二进制程序并重命名为 CloudflareSpeedTest
-          # 查找当前目录下除了 .tar.gz / .txt / .md 外的文件
-          EXEC_FILE=$(find . -maxdepth 1 -type f ! -name "*.tar.gz" ! -name "*.txt" ! -name "*.md" ! -name "*.sh" ! -name ".*" | head -n 1)
+          # 3. 使用 file 命令精确提取 ELF 格式的二进制可执行文件
+          EXEC_FILE=$(file * | grep 'ELF 64-bit' | awk -F: '{print $1}' | head -n 1)
           
           if [ -n "$EXEC_FILE" ]; then
-            mv "$EXEC_FILE" CloudflareSpeedTest
+            echo "Matched binary executable: $EXEC_FILE"
+            # 如果解压出来的名称不是 CloudflareSpeedTest，重命名它
+            if [ "$EXEC_FILE" != "CloudflareSpeedTest" ]; then
+              mv "$EXEC_FILE" CloudflareSpeedTest
+            fi
+          else
+            echo "Error: Couldn't find ELF binary!"
+            exit 1
           fi
           
           chmod +x CloudflareSpeedTest
