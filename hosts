@@ -1,18 +1,28 @@
-# Google & YouTube Hosts
-# 注意：需将 142.250.x.x 替换为你当前网络下打通的有效 Google 官方 IP
-
-# Google Core Services
+# ==========================================
+# Google & YouTube Services
+# 说明：必须填入当前网络可直连的 Google 官方 IP (例如 GGC/SNI IP)
+# 默认初始占位 IP: 142.250.204.46
+# ==========================================
 142.250.204.46 www.google.com
 142.250.204.46 google.com
 142.250.204.46 accounts.google.com
 142.250.204.46 ssl.gstatic.com
 142.250.204.46 gstatic.com
 142.250.204.46 apis.google.com
-
-# YouTube Services
 142.250.204.46 www.youtube.com
 142.250.204.46 youtube.com
 142.250.204.46 m.youtube.com
 142.250.204.46 i.ytimg.com
 142.250.204.46 yt3.ggpht.com
 142.250.204.46 googlevideo.com
+
+# ==========================================
+# Spotify Services
+# 说明：Spotify 依赖 Fastly 及 Google Cloud 节点
+# 默认初始占位 IP: 151.101.65.178 / 35.186.224.47
+# ==========================================
+151.101.65.178 spotify.com
+151.101.65.178 www.spotify.com
+151.101.65.178 open.spotify.com
+35.186.224.47  ap.spotify.com
+35.186.224.47  dealer.spotify.com
