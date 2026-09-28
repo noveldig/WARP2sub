@@ -21,26 +21,23 @@ jobs:
 
       - name: Download CloudflareSpeedTest Tool
         run: |
-          # 1. 解析 GitHub Release API 获取真实的 linux_amd64 下载链接
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -o 'https://[^"]*linux_amd64[^"]*' | head -n 1)
-          
+          # 1. 动态提取最新版下载链接（静默提取，规避 broken pipe）
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -o 'https://[^"]*linux_amd64[^"]*' | sed -n '1p')
           echo "Found Download URL: $DOWNLOAD_URL"
           
-          # 2. 如果是 zip 格式或 tar.gz 格式进行针对性下载解压
-          if [[ "$DOWNLOAD_URL" == *.zip ]]; then
-            wget -O CloudflareSpeedTest.zip "$DOWNLOAD_URL"
-            unzip -o CloudflareSpeedTest.zip
-          else
-            wget -O CloudflareSpeedTest.tar.gz "$DOWNLOAD_URL"
-            tar -zxf CloudflareSpeedTest.tar.gz
+          # 2. 下载并解压
+          wget -O CloudflareSpeedTest.tar.gz "$DOWNLOAD_URL"
+          tar -zxf CloudflareSpeedTest.tar.gz
+          
+          # 3. 兼容处理：检查解压出的程序文件名（可能是 cfst 或 CloudflareSpeedTest）并统一重命名
+          if [ -f "cfst" ]; then
+            mv cfst CloudflareSpeedTest
           fi
           
-          # 3. 赋予执行权限
           chmod +x CloudflareSpeedTest
-          
+
       - name: Fetch WARP IP List
         run: |
-          # 下载最新的 Cloudflare / WARP IP 段列表
           curl -s https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/ip.txt -o ip.txt || true
           if [ ! -s ip.txt ]; then
             echo "162.159.192.0/24" > ip.txt
@@ -48,6 +45,11 @@ jobs:
             echo "162.159.195.0/24" >> ip.txt
             echo "188.114.96.0/24" >> ip.txt
           fi
+
+      - name: Run SpeedTest
+        run: |
+          # 运行测速
+          ./CloudflareSpeedTest -f ip.txt -dn 10 -o result.csv
 
       - name: Run SpeedTest
         run: |
