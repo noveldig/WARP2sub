@@ -65,14 +65,12 @@ jobs:
             exit 1
           fi
 
-          # 2. 检查或初始化 hosts 文件（首次运行自动补全初始统一 IP）
+          # 2. 检查或初始化 hosts 文件（如果不存在则自动写入初始 IP 与示例域名）
           if [ ! -f "hosts" ]; then
-            echo "hosts file not found, creating a default hosts file..."
-            cat << 'EOF' > hosts
-# Cloudflare CDN Acceleration Hosts
-104.16.132.229 cdn.example.com
-104.16.132.229 assets.example.com
-EOF
+            echo "hosts file not found, creating default hosts..."
+            echo "# Cloudflare CDN Acceleration Hosts" > hosts
+            echo "104.16.132.229 cdn.example.com" >> hosts
+            echo "104.16.132.229 assets.example.com" >> hosts
           fi
 
           # 3. 提取 hosts 中当前已有的统一旧 IP（匹配第一个 IPv4 地址）
