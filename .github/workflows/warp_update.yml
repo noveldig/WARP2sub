@@ -1,0 +1,62 @@
+name: Auto SpeedTest & Update WARP Sub
+
+on:
+  schedule:
+    # 每 6 小时自动运行一次 (Cron 语法: UTC 时间 0点, 6点, 12点, 18点)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # 支持在 GitHub 页面手动点击运行
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget curl unzip
+
+      - name: Download CloudflareSpeedTest Tool
+        run: |
+          # 获取最新的 CloudflareSpeedTest 测速工具
+          VERSION=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Latest version: $VERSION"
+          wget -N -O CloudflareSpeedTest.tar.gz "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${VERSION}/CloudflareSpeedTest_linux_amd64.tar.gz"
+          tar -zxf CloudflareSpeedTest.tar.gz
+          chmod +x CloudflareSpeedTest
+
+      - name: Fetch WARP IP List
+        run: |
+          # 下载最新的 Cloudflare / WARP IP 段列表
+          curl -s https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/ip.txt -o ip.txt || true
+          if [ ! -s ip.txt ]; then
+            echo "162.159.192.0/24" > ip.txt
+            echo "162.159.193.0/24" >> ip.txt
+            echo "162.159.195.0/24" >> ip.txt
+            echo "188.114.96.0/24" >> ip.txt
+          fi
+
+      - name: Run SpeedTest
+        run: |
+          # 执行测速，筛选出 10 个最优质 IP，结果输出到 result.csv
+          # -f ip.txt 指定 IP 库，-dn 10 指定输出数量，-p 0 取消下载测速仅测延迟
+          ./CloudflareSpeedTest -f ip.txt -dn 10 -o result.csv
+
+      - name: Commit & Push Results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # 检查 result.csv 是否有更新
+          git add result.csv ip.txt
+          if git diff --staged --quiet; then
+            echo "No changes in speedtest result."
+          else
+            git commit -m "Auto update best WARP IPs [$(date -u +'%Y-%m-%d %H:%M:%S UTC')]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
