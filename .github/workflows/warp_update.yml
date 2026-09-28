@@ -21,19 +21,21 @@ jobs:
 
       - name: Download CloudflareSpeedTest Tool
         run: |
-          # 1. 自动获取最新 Tag
-          VERSION=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "Latest version: $VERSION"
+          # 1. 解析 GitHub Release API 获取真实的 linux_amd64 下载链接
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep -o 'https://[^"]*linux_amd64[^"]*' | head -n 1)
           
-          # 2. 修正带有版本号前缀的文件下载链接
-          DOWNLOAD_URL="https://github.com/XIU2/CloudflareSpeedTest/releases/download/${VERSION}/CloudflareSpeedTest_linux_amd64.tar.gz"
+          echo "Found Download URL: $DOWNLOAD_URL"
           
-          # 如果带 v 前缀的版本文件名报错，尝试匹配完整的带版本号文件名
-          wget -O CloudflareSpeedTest.tar.gz "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${VERSION}/CloudflareSpeedTest_${VERSION}_linux_amd64.tar.gz" || \
-          wget -O CloudflareSpeedTest.tar.gz "https://github.com/XIU2/CloudflareSpeedTest/releases/download/${VERSION}/CloudflareSpeedTest_linux_amd64.tar.gz"
+          # 2. 如果是 zip 格式或 tar.gz 格式进行针对性下载解压
+          if [[ "$DOWNLOAD_URL" == *.zip ]]; then
+            wget -O CloudflareSpeedTest.zip "$DOWNLOAD_URL"
+            unzip -o CloudflareSpeedTest.zip
+          else
+            wget -O CloudflareSpeedTest.tar.gz "$DOWNLOAD_URL"
+            tar -zxf CloudflareSpeedTest.tar.gz
+          fi
           
-          # 3. 解压并赋予执行权限
-          tar -zxf CloudflareSpeedTest.tar.gz
+          # 3. 赋予执行权限
           chmod +x CloudflareSpeedTest
           
       - name: Fetch WARP IP List
